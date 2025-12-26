@@ -1,0 +1,31 @@
+# --- Python General ---
+__pycache__/
+*.py[cod]
+*$py.class
+
+# --- Virtual Environment ---
+.venv/
+venv/
+env/
+
+# --- Environment Variables & Secrets (IMPORTANT) ---
+# Never commit your API keys
+.env
+
+# --- Project Data (Privacy Protection) ---
+# Ignore all files inside these folders...
+data/input/*
+data/output/*
+
+# ...EXCEPT the .gitkeep file (so the folder stays)
+!data/input/.gitkeep
+!data/output/.gitkeep
+
+# --- Microsoft Word Temporary Files ---
+# These are the ~$ files visible in your screenshot
+~$*
+*.tmp
+
+# --- IDE Settings (Optional but recommended) ---
+.vscode/
+.idea/
