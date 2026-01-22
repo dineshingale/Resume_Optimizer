@@ -1,6 +1,7 @@
 import os
 import json
-import google.generativeai as genai
+from google import genai
+from google.genai import types
 from dotenv import load_dotenv
 
 # Load environment variables (API Key)
@@ -10,17 +11,13 @@ class GeminiEngine:
     def __init__(self):
         # 1. Setup Configuration
         api_key = os.getenv("GEMINI_API_KEY")
-        if not api_key:
-            raise ValueError("❌ GEMINI_API_KEY not found in .env file. Please check your configuration.")
         
-        genai.configure(api_key=api_key)
+        # Check if API key is missing or is just a placeholder
+        if not api_key or "AIza" not in api_key:
+            raise ValueError("❌ GEMINI_API_KEY not found or invalid in .env file. Please check your configuration.")
         
-        # 2. Initialize Model
-        self.model = genai.GenerativeModel(
-            # Use the full, correct Pro model name from your list
-            model_name="models/gemini-pro-latest",
-            generation_config={"response_mime_type": "application/json"}
-        )
+        # 2. Initialize Client (New SDK Method)
+        self.client = genai.Client(api_key=api_key)
 
     def get_optimization_suggestions(self, resume_text_list, jd_text, system_instruction):
         """
@@ -36,44 +33,59 @@ class GeminiEngine:
         )
 
         try:
-            # 4. Call the API with the System Instruction (The Rules) and User Data
-            response = self.model.generate_content(
+            # 4. Call the API (New SDK Method)
+            # The new SDK allows passing system_instruction directly in the config
+            response = self.client.models.generate_content(
+                model='gemini-flash-latest', # Using the faster, newer model
                 contents=full_prompt,
-                # We pass the system instruction (the specific "Do not lie" rules) here
-                # Note: System instructions are technically part of model config or prepended to prompt
-                # For simplicity in 1.5, we often prepend, but let's use the 'system_instruction' param if supported
-                # or prepend it to the prompt.
+                config=types.GenerateContentConfig(
+                    system_instruction=system_instruction,
+                    response_mime_type='application/json',
+                    temperature=0.7 
+                )
             )
-            
-            # Since 'system_instruction' is a specific parameter in newer SDKs:
-            # We will use a chat session approach or prepend it for maximum compatibility.
-            # Here is the robust 'Chat' approach:
-            chat = self.model.start_chat(history=[
-                {"role": "user", "parts": system_instruction}
-            ])
-            
-            response = chat.send_message(full_prompt)
 
             # 5. Parse the JSON Response
-            # Gemini returns a string, we need to convert it to a Python Dictionary
+            # The new SDK returns the text directly in .text
+            if not response.text:
+                print("❌ Error: Received empty response from Gemini.")
+                return []
+
             response_json = json.loads(response.text)
             
             # Extract the list of changes
             if "changes" in response_json:
                 return response_json["changes"]
             else:
-                # Handle cases where AI returns a valid JSON but with wrong key
+                # Handle cases where AI returns valid JSON but with wrong key
                 print("⚠ Warning: AI returned JSON but 'changes' key was missing.")
+                # Fallback: check if it returned a list directly
+                if isinstance(response_json, list):
+                    return response_json
                 return []
 
         except json.JSONDecodeError:
             print("❌ Error: Gemini did not return valid JSON.")
-            print(f"Raw Response: {response.text}")
+            print(f"Raw Response: {response.text if 'response' in locals() else 'No Response'}")
             return []
         except Exception as e:
             print(f"❌ API Error: {e}")
             return []
 
-# Simple test block to check if file loads correctly (not for running the app)
+    def get_gemini_response(prompt):
+        try:
+            # Use 'gemini-1.5-flash' which is the standard identifier
+            model = genai.GenerativeModel('gemini-1.5-flash')
+            response = model.generate_content(prompt)
+            return response
+        except Exception as e:
+            print(f"❌ Error while getting response from Gemini: {e}")
+            return None
+
+# Simple test block to check if file loads correctly
 if __name__ == "__main__":
-    print("GeminiEngine class loaded successfully.")
+    try:
+        engine = GeminiEngine()
+        print("✅ GeminiEngine class loaded and Client initialized successfully.")
+    except Exception as e:
+        print(f"❌ Initialization Failed: {e}")
